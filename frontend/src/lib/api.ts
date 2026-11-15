@@ -245,6 +245,75 @@ export interface IncomeReportParams {
   accountId?: number;
 }
 
+/* IRR report */
+export interface IrrSummary {
+  irr_pct: number | null;
+  days: number;
+  start_value: number;
+  end_value: number;
+  contributed: number;
+  withdrawn: number;
+  net_flow: number;
+  gain: number;
+}
+
+export interface IrrInception {
+  irr_pct: number | null;
+  from: string | null;
+  days: number | null;
+  contributed: number;
+  withdrawn: number;
+  net_flow: number;
+  end_value: number;
+  gain: number | null;
+}
+
+export interface IrrBucket {
+  period: string;
+  from: string;
+  to: string;
+  partial: boolean;
+  days: number;
+  irr_pct: number | null;
+  start_value: number;
+  end_value: number;
+  contributed: number;
+  withdrawn: number;
+  net_flow: number;
+  gain: number;
+}
+
+export interface IrrFlowRow {
+  transaction_id: number;
+  trade_date: string;
+  type: TxnType;
+  direction: "in" | "out";
+  account_id: number;
+  account_name: string | null;
+  amount: number;
+  currency: string;
+  fx_rate: number;
+  amount_base: number;
+}
+
+export interface IrrReport {
+  from: string;
+  to: string;
+  base_currency: string;
+  summary: IrrSummary;
+  since_inception: IrrInception;
+  years: IrrBucket[];
+  months: IrrBucket[];
+  flows: IrrFlowRow[];
+  warnings: string[];
+}
+
+export interface IrrReportParams {
+  from: string;
+  to: string;
+  base?: string;
+}
+
 export interface PriceRow {
   id: number;
   instrument_id: number;
@@ -347,6 +416,12 @@ export const getIncomeReport = ({ from, to, base, accountId }: IncomeReportParam
   if (base) params.set("base", base);
   if (accountId) params.set("account_id", String(accountId));
   return request<IncomeReport>(`/reports/income?${params.toString()}`);
+};
+
+export const getIrrReport = ({ from, to, base }: IrrReportParams) => {
+  const params = new URLSearchParams({ from, to });
+  if (base) params.set("base", base);
+  return request<IrrReport>(`/reports/irr?${params.toString()}`);
 };
 
 /* market data */

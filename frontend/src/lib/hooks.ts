@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   getIncomeReport,
+  getIrrReport,
   getMeta,
   getSummary,
   listAccounts,
@@ -9,6 +10,7 @@ import {
   listPrices,
   listTransactions,
   type IncomeReportParams,
+  type IrrReportParams,
   type TransactionFilters,
 } from "./api";
 
@@ -49,6 +51,13 @@ export function useIncomeReport(params: IncomeReportParams) {
       params.accountId ?? "all",
     ],
     queryFn: () => getIncomeReport(params),
+  });
+}
+
+export function useIrrReport(params: IrrReportParams) {
+  return useQuery({
+    queryKey: ["report", "irr", params.from, params.to, params.base ?? "default"],
+    queryFn: () => getIrrReport(params),
   });
 }
 
