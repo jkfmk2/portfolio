@@ -14,11 +14,9 @@ import {
 } from "../ui";
 import { Kpi } from "./Kpi";
 
-const FLOW_LABELS: Record<string, string> = {
+const FLOW_LABELS: Record<"deposit" | "withdraw", string> = {
   deposit: "存入",
   withdraw: "提出",
-  transfer_in: "轉入",
-  transfer_out: "轉出",
 };
 
 function irrText(value: number | null): string {
@@ -201,7 +199,8 @@ export default function IrrReportView({ range }: { range: Range }) {
           </div>
 
           <p className="mt-3 text-xs text-slate-400">
-            IRR 採 XIRR（365 天／年）；外部現金流只含存入、提出、轉入、轉出，期初資產視為期初投入。
+            IRR 採 XIRR（365 天／年）；外部現金流只含存入、提出，期初資產視為期初投入。
+            轉入／轉出屬帳戶間內部調度，需成對記錄，不列入 IRR。
           </p>
 
           <BucketTable
@@ -223,10 +222,10 @@ export default function IrrReportView({ range }: { range: Range }) {
           <Card className="mt-4">
             <CardHeader
               title="期間現金流"
-              subtitle={`${data.flows.length} 筆外部現金流 · 投入為負向、提出為正向`}
+              subtitle={`${data.flows.length} 筆外部現金流 · 僅列存入／提出`}
             />
             {data.flows.length === 0 ? (
-              <EmptyState title="此期間沒有外部現金流" />
+              <EmptyState title="此期間沒有存入或提出" />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-sm">
@@ -247,9 +246,7 @@ export default function IrrReportView({ range }: { range: Range }) {
                           {fmtDate(row.trade_date)}
                         </td>
                         <td className="px-3 py-3">
-                          <Badge tone={row.type.startsWith("transfer") ? "move" : "income"}>
-                            {FLOW_LABELS[row.type] ?? row.type}
-                          </Badge>
+                          <Badge tone="income">{FLOW_LABELS[row.type]}</Badge>
                         </td>
                         <td className="px-3 py-3 text-slate-600">{row.account_name ?? "—"}</td>
                         <td className="px-3 py-3">

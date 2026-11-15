@@ -143,14 +143,18 @@ def test_only_external_cash_flows_are_counted(app):
         assert report["summary"]["net_flow"] == pytest.approx(95_000)
 
 
-def test_transfers_count_as_external_flows(app):
+def test_internal_transfers_are_excluded_from_external_flows(app):
     with app.app_context():
-        account, _ = _setup()
+        broker, _ = _setup()
+        bank = Account(name="Bank", currency="TWD")
+        db.session.add(bank)
+        db.session.commit()
+
         db.session.add_all(
             [
-                _txn(account, type="deposit", trade_date=date(2024, 1, 1), gross_amount=100_000),
-                _txn(account, type="transfer_out", trade_date=date(2024, 3, 1), gross_amount=20_000),
-                _txn(account, type="transfer_in", trade_date=date(2024, 4, 1), gross_amount=5_000),
+                _txn(bank, type="deposit", trade_date=date(2024, 1, 1), gross_amount=100_000),
+                _txn(bank, type="transfer_out", trade_date=date(2024, 2, 1), gross_amount=20_000),
+                _txn(broker, type="transfer_in", trade_date=date(2024, 2, 1), gross_amount=20_000),
             ]
         )
         db.session.commit()
@@ -158,10 +162,14 @@ def test_transfers_count_as_external_flows(app):
         report = build_irr_report(date(2024, 1, 1), date(2024, 12, 31), "TWD")
         summary = report["summary"]
 
-        assert summary["contributed"] == pytest.approx(105_000)
-        assert summary["withdrawn"] == pytest.approx(20_000)
-        assert summary["net_flow"] == pytest.approx(85_000)
-        assert {flow["direction"] for flow in report["flows"]} == {"in", "out"}
+        # The transfer is internal: total assets stay at 100,000 and only the
+        # original deposit is an external flow.
+        assert summary["start_value"] == pytest.approx(0)
+        assert summary["end_value"] == pytest.approx(100_000)
+        assert summary["contributed"] == pytest.approx(100_000)
+        assert summary["withdrawn"] == pytest.approx(0)
+        assert summary["net_flow"] == pytest.approx(100_000)
+        assert [flow["type"] for flow in report["flows"]] == ["deposit"]
 
 
 def test_year_and_month_buckets(app):

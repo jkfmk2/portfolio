@@ -5,9 +5,11 @@ this period". It uses the same valuation as :func:`app.services.portfolio.
 build_portfolio`, so holdings, cash, FX and missing-price warnings reconcile
 with the dashboard.
 
-Only external cash flows count: deposits, withdrawals, transfers in and
-transfers out. Buys, sells, dividends, interest, fees and taxes are internal to
-the portfolio and are already reflected in its value.
+Only external cash flows count: deposits and withdrawals. Buys, sells,
+dividends, interest, fees and taxes are internal to the portfolio and are
+already reflected in its value. Transfers between accounts are also internal;
+they must be recorded as a matched ``transfer_out`` / ``transfer_in`` pair and
+are excluded from IRR.
 """
 
 from __future__ import annotations
@@ -21,9 +23,9 @@ from .cashflow import cash_flow, funding_account_id
 from .portfolio import build_portfolio, get_fx_rate
 
 DAYS_PER_YEAR = 365.0
-CONTRIBUTION_TYPES = {"deposit", "transfer_in"}
-WITHDRAWAL_TYPES = {"withdraw", "transfer_out"}
-EXTERNAL_TYPES = CONTRIBUTION_TYPES | WITHDRAWAL_TYPES
+# Transfers between accounts move money inside the portfolio. They are not
+# contributions or withdrawals and must never enter the IRR cash-flow series.
+EXTERNAL_TYPES = {"deposit", "withdraw"}
 
 
 def xirr(flows: list[tuple[date, float]]) -> float | None:

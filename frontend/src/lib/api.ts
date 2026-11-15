@@ -286,7 +286,7 @@ export interface IrrBucket {
 export interface IrrFlowRow {
   transaction_id: number;
   trade_date: string;
-  type: TxnType;
+  type: "deposit" | "withdraw";
   direction: "in" | "out";
   account_id: number;
   account_name: string | null;
