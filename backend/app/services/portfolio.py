@@ -23,6 +23,7 @@ from sqlalchemy import or_
 from ..extensions import db
 from ..models import ASSET_LABELS, Account, FxRate, Instrument, Price, Transaction
 from .cashflow import cash_flow, funding_account_id
+from .positions import apply_txn, new_state
 
 
 def _f(value) -> float:
@@ -96,52 +97,15 @@ def build_portfolio(as_of: date, base_currency: str, account_id: int | None = No
             continue
 
         currency = txn.currency or base_currency
-        qty = _f(txn.quantity)
-        price = _f(txn.price)
-        fee = _f(txn.fee)
-        tax = _f(txn.tax)
-        gross = _f(txn.gross_amount) or (qty * price)
-
         state = states.setdefault(
-            (txn.account_id, txn.instrument_id),
-            {
-                "quantity": 0.0,
-                "avg_cost": 0.0,
-                "realized": 0.0,
-                "income": 0.0,
-                "fees": 0.0,
-                "currency": currency,
-            },
+            (txn.account_id, txn.instrument_id), new_state(currency)
         )
-
-        if txn.type == "buy":
-            new_qty = state["quantity"] + qty
-            cost = gross + fee + tax
-            if new_qty > 0:
-                state["avg_cost"] = (state["avg_cost"] * state["quantity"] + cost) / new_qty
-            state["quantity"] = new_qty
-            state["fees"] += fee
-        elif txn.type == "sell":
-            sell_qty = qty
-            if sell_qty > state["quantity"] + 1e-9:
-                warnings.append(
-                    f"交易 #{txn.id} 賣出 {qty:g} 超過持倉 {state['quantity']:g}，已以持倉量計算"
-                )
-                sell_qty = state["quantity"]
-            proceeds = price * sell_qty - fee - tax
-            state["realized"] += proceeds - state["avg_cost"] * sell_qty
-            state["quantity"] -= sell_qty
-            state["fees"] += fee
-            if state["quantity"] <= 1e-9:
-                state["quantity"] = 0.0
-                state["avg_cost"] = 0.0
-        elif txn.type == "split":
-            new_qty = state["quantity"] + qty
-            if new_qty > 0:
-                state["avg_cost"] = state["avg_cost"] * state["quantity"] / new_qty
-            state["quantity"] = new_qty
-        elif txn.type in ("dividend", "interest"):
-            state["income"] += gross
+        sale = apply_txn(state, txn)
+        if sale and sale["oversold"]:
+            warnings.append(
+                f"交易 #{txn.id} 賣出 {sale['requested_quantity']:g} "
+                f"超過持倉 {sale['held_quantity']:g}，已以持倉量計算"
+            )
 
     accounts = {a.id: a for a in Account.query.all()}
     holdings: list[dict] = []

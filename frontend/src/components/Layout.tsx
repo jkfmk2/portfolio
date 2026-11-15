@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import {
   ArrowLeftRight,
+  FileBarChart,
   LayoutDashboard,
   LineChart,
   Settings,
@@ -14,6 +15,7 @@ const NAV = [
   { to: "/transactions", label: "交易", icon: ArrowLeftRight },
   { to: "/instruments", label: "標的", icon: LineChart },
   { to: "/accounts", label: "帳戶", icon: Wallet },
+  { to: "/reports", label: "報表", icon: FileBarChart },
   { to: "/settings", label: "設定", icon: Settings },
 ];
 

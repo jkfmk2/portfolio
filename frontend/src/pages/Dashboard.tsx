@@ -233,7 +233,15 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
           <div className="border-t border-slate-100 px-5 py-4">
-            <p className="text-xs font-medium text-slate-500">已實現 / 收益</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-slate-500">已實現 / 收益</p>
+              <Link
+                to="/reports"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 transition hover:text-slate-800"
+              >
+                查看報表 <ArrowUpRight size={12} />
+              </Link>
+            </div>
             <div className="mt-2 flex gap-6">
               <div>
                 <p className="text-[11px] text-slate-400">已實現損益</p>

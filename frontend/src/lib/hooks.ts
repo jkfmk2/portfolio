@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import {
+  getIncomeReport,
   getMeta,
   getSummary,
   listAccounts,
@@ -7,6 +8,7 @@ import {
   listInstruments,
   listPrices,
   listTransactions,
+  type IncomeReportParams,
   type TransactionFilters,
 } from "./api";
 
@@ -34,6 +36,20 @@ export function useSummary(date?: string, base?: string, accountId?: number) {
 
 export function useMeta() {
   return useQuery({ queryKey: ["meta"], queryFn: getMeta, staleTime: Infinity });
+}
+
+export function useIncomeReport(params: IncomeReportParams) {
+  return useQuery({
+    queryKey: [
+      "report",
+      "income",
+      params.from,
+      params.to,
+      params.base ?? "default",
+      params.accountId ?? "all",
+    ],
+    queryFn: () => getIncomeReport(params),
+  });
 }
 
 export function usePrices(instrumentId?: number) {

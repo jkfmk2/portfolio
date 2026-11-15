@@ -10,7 +10,8 @@ CASH_IN = {"dividend", "interest", "deposit", "transfer_in"}
 CASH_OUT = {"withdraw", "transfer_out", "fee", "tax"}
 
 
-def _amount(txn) -> float:
+def gross_amount(txn) -> float:
+    """Transaction's gross amount, falling back to quantity × price."""
     gross = float(txn.gross_amount or 0)
     if not gross:
         gross = float(txn.quantity or 0) * float(txn.price or 0)
@@ -19,7 +20,7 @@ def _amount(txn) -> float:
 
 def cash_flow(txn) -> tuple[float, str] | None:
     """Signed cash impact of a transaction, plus its currency."""
-    gross = _amount(txn)
+    gross = gross_amount(txn)
     fee = float(txn.fee or 0)
     tax = float(txn.tax or 0)
     currency = txn.currency or "TWD"

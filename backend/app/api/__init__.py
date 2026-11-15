@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint
 
-from . import accounts, instruments, market, meta, portfolio, transactions
+from . import accounts, instruments, market, meta, portfolio, reports, transactions
 from .common import error  # noqa: F401  (re-exported for convenience)
 
 BLUEPRINTS = (
@@ -11,6 +11,7 @@ BLUEPRINTS = (
     transactions.bp,
     market.bp,
     portfolio.bp,
+    reports.bp,
     meta.bp,
 )
 

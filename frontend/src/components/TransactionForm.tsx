@@ -86,6 +86,7 @@ export default function TransactionForm({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["summary"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["report"] });
       onDone();
     },
   });

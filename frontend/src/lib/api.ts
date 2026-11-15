@@ -157,6 +157,94 @@ export interface Meta {
   currencies: string[];
 }
 
+/* reports */
+export interface ReportBucket {
+  period: string;
+  realized_pnl: number;
+  dividends_gross: number;
+  dividends_net: number;
+  interest_gross: number;
+  interest_net: number;
+  income_net: number;
+  fees: number;
+  taxes: number;
+  total: number;
+}
+
+export interface ReportTotals {
+  realized_pnl: number;
+  proceeds: number;
+  cost_basis: number;
+  dividends_gross: number;
+  dividends_net: number;
+  interest_gross: number;
+  interest_net: number;
+  income_gross: number;
+  income_net: number;
+  fees: number;
+  taxes: number;
+  total: number;
+}
+
+export interface ReportRealizedRow {
+  transaction_id: number;
+  trade_date: string;
+  account_id: number;
+  account_name: string | null;
+  instrument_id: number;
+  symbol: string;
+  name: string;
+  asset_type: AssetType;
+  quantity: number;
+  price: number;
+  proceeds: number;
+  cost_basis: number;
+  fee: number;
+  tax: number;
+  currency: string;
+  fx_rate: number;
+  realized_pnl: number;
+  realized_pnl_base: number;
+}
+
+export interface ReportIncomeRow {
+  transaction_id: number;
+  trade_date: string;
+  type: "dividend" | "interest";
+  account_id: number;
+  account_name: string | null;
+  instrument_id: number;
+  symbol: string;
+  name: string;
+  gross: number;
+  fee: number;
+  tax: number;
+  net: number;
+  currency: string;
+  fx_rate: number;
+  gross_base: number;
+  net_base: number;
+}
+
+export interface IncomeReport {
+  from: string;
+  to: string;
+  base_currency: string;
+  account_id: number | null;
+  totals: ReportTotals;
+  buckets: ReportBucket[];
+  realized: ReportRealizedRow[];
+  income: ReportIncomeRow[];
+  warnings: string[];
+}
+
+export interface IncomeReportParams {
+  from: string;
+  to: string;
+  base?: string;
+  accountId?: number;
+}
+
 export interface PriceRow {
   id: number;
   instrument_id: number;
@@ -251,6 +339,14 @@ export const getSummary = (date?: string, base?: string, accountId?: number) => 
   if (accountId) params.set("account_id", String(accountId));
   const query = params.toString();
   return request<PortfolioSummary>(`/portfolio/summary${query ? `?${query}` : ""}`);
+};
+
+/* reports */
+export const getIncomeReport = ({ from, to, base, accountId }: IncomeReportParams) => {
+  const params = new URLSearchParams({ from, to });
+  if (base) params.set("base", base);
+  if (accountId) params.set("account_id", String(accountId));
+  return request<IncomeReport>(`/reports/income?${params.toString()}`);
 };
 
 /* market data */

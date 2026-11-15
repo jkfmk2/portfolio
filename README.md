@@ -12,6 +12,7 @@
 - 費用顯示：交易列表顯示成交金額、手續費、稅費與淨收付
 - 帳戶詳情：點進任一帳戶查看該帳戶的持倉、現金、損益與相關交易
 - 持倉計算：移動平均成本、已實現／未實現損益、投資報酬率
+- 收益報表：已實現損益與股息／利息的月報表、年報表與自訂期間，可依帳戶篩選
 - 多幣別：以 TWD 為基準幣別，自動用匯率換算
 - 資產配置：依標的類型、幣別、帳戶統計
 - 市場資料：手動維護價格與匯率（同日期自動覆蓋）
@@ -35,16 +36,19 @@ backend/
     models.py            Account / Instrument / Transaction / Price / FxRate
     schemas.py           Pydantic 輸入驗證
     services/portfolio.py 持倉、成本、現金、配置計算核心
+    services/positions.py 移動平均成本更新（總覽與報表共用）
+    services/reports.py   期間已實現損益與股息／利息報表
     services/cashflow.py  現金流與淨額規則（API 與計算共用）
     api/                 REST endpoints
     cli.py               init-db / seed-demo / reset-db
   tests/test_portfolio.py 回歸測試
+  tests/test_reports.py   報表回歸測試
   data/app.db            SQLite 資料庫（自動建立）
 frontend/
   src/
-    pages/               總覽、交易、標的、帳戶、設定
+    pages/               總覽、交易、標的、帳戶、報表、設定
     components/          Layout、UI、交易表單
-    lib/                 API client、hooks、格式化
+    lib/                 API client、hooks、格式化、報表期間
 ```
 
 ## 快速開始
@@ -93,6 +97,10 @@ cd backend
 - **成本基礎**：移動平均法。
 - **買入成本** = 數量 × 價格 + 手續費 + 稅費。
 - **賣出已實現損益** = 賣出價金 − 手續費 − 稅費 − 平均成本 × 賣出數量。
+- **報表歸屬**：收益報表以交易日期（`trade_date`）歸屬到月份；無活動月份補 0。買入手續費資本化進成本，不重複列為期間費用。
+- **報表匯率**：報表金額以「期間迄日」的匯率換算成基準幣別，與總覽以 `as_of` 換算一致；迄日為今天時可對帳。
+- **股息／利息**：明細同時顯示稅前、費稅、稅後，KPI 以稅後為主。
+- **報表範圍**：只含已實現損益與股息／利息，另彙總期間手續費與稅費；不含未實現損益變動與現金流摘要。現金類交易不列入收益。
 - **淨收付**：買入為 `−(成交金額 + 手續費 + 稅費)`；賣出、股利、利息、存入為 `成交金額 − 手續費 − 稅費`；提出、轉出、手續費、稅費為 `−(成交金額 + 手續費 + 稅費)`。
 - **帳戶歸屬**：`account_id` 是證券／持倉帳戶；`cash_account_id` 是資金帳戶（交割戶），留空代表與證券帳戶相同。持倉記在證券帳戶，現金流記在資金帳戶。
 - **現金餘額**：各帳戶所有交易的現金流加總（買入扣款、賣出入帳、股息利息入帳、存提款），依帳戶與幣別分開累計。
@@ -113,11 +121,14 @@ cd backend
 | PATCH/DELETE | `/api/transactions/:id` | 更新 / 刪除 |
 | GET | `/api/portfolio/summary` | 總資產、持倉、配置、現金、損益 |
 | GET | `/api/portfolio/holdings` | 僅持倉與現金 |
+| GET | `/api/reports/income` | 期間已實現損益與股息／利息報表 |
 | GET/POST | `/api/prices` | 價格列表 / 新增或覆蓋 |
 | GET/POST | `/api/fx-rates` | 匯率列表 / 新增或覆蓋 |
 | GET | `/api/meta` | 枚舉值、基準幣別 |
 
 `/api/portfolio/summary` 支援 `?date=YYYY-MM-DD` 回溯指定日期、`?base=USD` 切換計價幣別、`?account_id=1` 只看單一帳戶。交易列表的 `?account_id=1` 會同時比對證券帳戶與資金帳戶；另有 `?cash_account_id=1` 只看資金帳戶。
+
+`/api/reports/income` 支援 `?from=YYYY-MM-DD&to=YYYY-MM-DD`（預設今年 1/1～今天）、`?base=USD` 與 `?account_id=1`；`from > to` 或日期格式錯誤會回 400。回傳 `totals`、逐月 `buckets`、`realized`（已實現損益明細）與 `income`（股息／利息明細），以及缺匯率等 `warnings`。
 
 ## 測試
 
