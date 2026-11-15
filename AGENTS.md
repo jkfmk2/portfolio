@@ -17,6 +17,9 @@ Local-only, single-user portfolio tracker: Flask API + React SPA as two independ
 
 - **No migrations.** `create_app()` runs `db.create_all()` on every start, which never alters existing tables. Adding or renaming a column will not change the existing `backend/data/app.db`; use `flask reset-db` (destroys data) or a manual `ALTER TABLE`, and tell the user which one you did.
 - **Positions are never stored.** `app/services/portfolio.py` recomputes quantity, moving-average cost, realized/unrealized P&L and per-account cash from the `transactions` ledger. Change that service, not a holdings table.
+- **Two account roles per transaction.** `account_id` is the securities/holding account; `cash_account_id` (nullable) is the funding/settlement account. Cash flows use `cash_account_id or account_id`, positions use `account_id`. Cash-only transaction types store `cash_account_id = NULL`.
+- `app/services/cashflow.py` is the single definition of signed cash flow / net amount. Both `portfolio.py` and `Transaction.to_dict()` use it; do not re-implement the formulas.
+- `build_portfolio(as_of, base_currency, account_id=None)` scopes the whole valuation when `account_id` is set; `/api/portfolio/summary?account_id=` and the account-detail page rely on this.
 - `register_blueprints()` builds each URL as `/api` + the blueprint's own `url_prefix`. Passing `url_prefix` to `app.register_blueprint` *replaces* the blueprint prefix, so keep the pattern in `app/api/__init__.py`.
 - Money is `Numeric`/`Decimal` in SQLAlchemy but `float` in Pydantic schemas and JSON at the API boundary.
 - Missing price → valued at average cost; missing FX → rate 1. Both are reported in `summary.warnings`; keep that behavior.
@@ -26,6 +29,7 @@ Local-only, single-user portfolio tracker: Flask API + React SPA as two independ
 
 - All HTTP calls go through `src/lib/api.ts`; React Query hooks live in `src/lib/hooks.ts`.
 - After a mutation, invalidate the affected query keys: `["summary"]` for anything touching money, plus the entity list (`["transactions"]`, `["accounts"]`, `["instruments"]`, `["prices"]`, `["fx-rates"]`).
+- `useSummary(date?, base?, accountId?)` includes the account in its query key; the account-detail page (`/accounts/:id`) uses the third argument.
 - `tsconfig` is strict: `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax` (use `import type`), `erasableSyntaxOnly` (no enums/namespaces). `npm run build` fails on unused imports.
 - Tailwind v4: no `tailwind.config`; theme is in `src/index.css` (`@import "tailwindcss"` + `@theme`).
 - Shared primitives (Card, Button, Input, Select, Modal, Badge) live in `src/components/ui.tsx`; reuse them instead of adding a UI library.
@@ -40,4 +44,4 @@ Local-only, single-user portfolio tracker: Flask API + React SPA as two independ
 ## Environment
 
 - Windows + PowerShell. The virtualenv is at the repo root (`.venv`); the commands above assume cwd is `backend/` or `frontend/`.
-- This directory is not a git repository yet.
+- Git repository on branch `main`; DB, `.venv`, `node_modules`, `dist` are ignored.

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Wallet } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ChevronRight, Plus, Trash2, Wallet } from "lucide-react";
 import {
   createAccount,
   deleteAccount,
@@ -31,6 +32,7 @@ const ACCOUNT_TONE: Record<AccountType, string> = {
 
 export default function Accounts() {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const { data: accounts, isLoading } = useAccounts();
   const { data: meta } = useMeta();
   const { data: summary } = useSummary();
@@ -89,7 +91,7 @@ export default function Accounts() {
     <div>
       <PageHeader
         title="帳戶"
-        description="證券戶、銀行戶與現金錢包，現金餘額由交易推算"
+        description="證券戶、銀行戶與現金錢包，現金餘額由交易推算；點選任一列查看該帳戶持倉"
         action={
           <Button onClick={() => setOpen(true)}>
             <Plus size={16} /> 新增帳戶
@@ -125,7 +127,11 @@ export default function Accounts() {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {accounts.map((a) => (
-                  <tr key={a.id} className="hover:bg-slate-50/60">
+                  <tr
+                    key={a.id}
+                    onClick={() => navigate(`/accounts/${a.id}`)}
+                    className="cursor-pointer hover:bg-slate-50/60"
+                  >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2.5">
                         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
@@ -151,15 +157,19 @@ export default function Accounts() {
                       {fmtMoney(balanceFor(a), a.currency, 2)}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <button
-                        onClick={() => {
-                          if (window.confirm(`刪除帳戶「${a.name}」？`)) remove.mutate(a.id);
-                        }}
-                        className="rounded-lg p-1.5 text-slate-300 transition hover:bg-rose-50 hover:text-rose-600"
-                        aria-label="刪除"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <ChevronRight size={15} className="text-slate-300" />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`刪除帳戶「${a.name}」？`)) remove.mutate(a.id);
+                          }}
+                          className="rounded-lg p-1.5 text-slate-300 transition hover:bg-rose-50 hover:text-rose-600"
+                          aria-label="刪除"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -130,6 +130,7 @@ class InstrumentUpdate(BaseModel):
 
 class TransactionIn(BaseModel):
     account_id: int
+    cash_account_id: int | None = None
     instrument_id: int | None = None
     type: str
     trade_date: date
@@ -158,6 +159,7 @@ class TransactionIn(BaseModel):
 
 class TransactionUpdate(BaseModel):
     account_id: int | None = None
+    cash_account_id: int | None = None
     instrument_id: int | None = None
     type: str | None = None
     trade_date: date | None = None

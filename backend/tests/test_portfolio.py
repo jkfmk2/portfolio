@@ -182,3 +182,273 @@ def test_reject_trade_without_instrument(app):
         json={"account_id": account["id"], "type": "buy", "trade_date": "2024-01-01", "quantity": 1, "price": 10},
     )
     assert response.status_code == 400
+
+
+def test_funding_account_separate_from_holding(app):
+    with app.app_context():
+        bank = Account(name="Bank", currency="TWD")
+        broker = Account(name="Broker", currency="TWD")
+        instrument = Instrument(symbol="X", name="X", asset_type="stock", currency="TWD", market="TW")
+        db.session.add_all([bank, broker, instrument])
+        db.session.commit()
+
+        db.session.add_all(
+            [
+                _txn(bank, type="deposit", trade_date=date(2024, 1, 1), gross_amount=100_000),
+                _txn(
+                    broker, instrument, type="buy", trade_date=date(2024, 1, 2),
+                    cash_account_id=bank.id, quantity=100, price=100, gross_amount=10_000, fee=10,
+                ),
+            ]
+        )
+        db.session.commit()
+
+        portfolio = build_portfolio(date(2024, 12, 31), "TWD")
+
+        assert len(portfolio["holdings"]) == 1
+        assert portfolio["holdings"][0]["account_id"] == broker.id
+
+        cash = {p["account_id"]: p["amount"] for p in portfolio["cash_positions"]}
+        assert cash[bank.id] == pytest.approx(89_990)
+        assert broker.id not in cash
+        assert portfolio["cash_value"] == pytest.approx(89_990)
+
+
+def test_dividend_cash_goes_to_funding_account(app):
+    with app.app_context():
+        bank = Account(name="Bank", currency="TWD")
+        broker = Account(name="Broker", currency="TWD")
+        instrument = Instrument(symbol="X", name="X", asset_type="stock", currency="TWD", market="TW")
+        db.session.add_all([bank, broker, instrument])
+        db.session.commit()
+
+        db.session.add_all(
+            [
+                _txn(broker, instrument, type="buy", trade_date=date(2024, 1, 2), quantity=100, price=100, gross_amount=10_000),
+                _txn(
+                    broker, instrument, type="dividend", trade_date=date(2024, 6, 1),
+                    cash_account_id=bank.id, gross_amount=300,
+                ),
+            ]
+        )
+        db.session.commit()
+
+        portfolio = build_portfolio(date(2024, 12, 31), "TWD")
+        holding = portfolio["holdings"][0]
+
+        assert holding["account_id"] == broker.id
+        assert holding["income"] == pytest.approx(300)
+        cash = {p["account_id"]: p["amount"] for p in portfolio["cash_positions"]}
+        assert cash[bank.id] == pytest.approx(300)
+
+
+def test_account_scoped_summary(app):
+    with app.app_context():
+        bank = Account(name="Bank", currency="TWD")
+        broker = Account(name="Broker", currency="TWD")
+        instrument = Instrument(symbol="X", name="X", asset_type="stock", currency="TWD", market="TW")
+        db.session.add_all([bank, broker, instrument])
+        db.session.commit()
+
+        db.session.add_all(
+            [
+                _txn(bank, type="deposit", trade_date=date(2024, 1, 1), gross_amount=100_000),
+                _txn(
+                    broker, instrument, type="buy", trade_date=date(2024, 1, 2),
+                    cash_account_id=bank.id, quantity=100, price=100, gross_amount=10_000,
+                ),
+            ]
+        )
+        db.session.commit()
+
+        broker_view = build_portfolio(date(2024, 12, 31), "TWD", account_id=broker.id)
+        assert broker_view["holdings_count"] == 1
+        assert broker_view["total_value"] == pytest.approx(10_000)
+        assert broker_view["cash_value"] == pytest.approx(0)
+        assert broker_view["accounts_count"] == 1
+
+        bank_view = build_portfolio(date(2024, 12, 31), "TWD", account_id=bank.id)
+        assert bank_view["holdings_count"] == 0
+        assert bank_view["total_value"] == pytest.approx(90_000)
+        assert bank_view["cash_value"] == pytest.approx(90_000)
+
+
+def test_realized_pnl_survives_closed_position(app):
+    with app.app_context():
+        account = Account(name="A", currency="TWD")
+        instrument = Instrument(symbol="X", name="X", asset_type="stock", currency="TWD", market="TW")
+        db.session.add_all([account, instrument])
+        db.session.commit()
+
+        db.session.add_all(
+            [
+                _txn(account, instrument, type="buy", trade_date=date(2024, 1, 1), quantity=100, price=100, gross_amount=10_000),
+                _txn(account, instrument, type="sell", trade_date=date(2024, 6, 1), quantity=100, price=150, gross_amount=15_000, fee=10),
+            ]
+        )
+        db.session.commit()
+
+        portfolio = build_portfolio(date(2024, 12, 31), "TWD")
+
+        assert portfolio["holdings"] == []
+        assert portfolio["realized_pnl"] == pytest.approx(4_990)
+        assert portfolio["cash_value"] == pytest.approx(4_990)
+
+
+def test_api_edit_transaction(app):
+    client = app.test_client()
+    account = client.post("/api/accounts", json={"name": "A", "currency": "TWD"}).get_json()
+    instrument = client.post(
+        "/api/instruments",
+        json={"symbol": "2330", "asset_type": "stock", "currency": "TWD", "market": "TW"},
+    ).get_json()
+
+    buy = client.post(
+        "/api/transactions",
+        json={
+            "account_id": account["id"],
+            "instrument_id": instrument["id"],
+            "type": "buy",
+            "trade_date": "2024-01-02",
+            "quantity": 10,
+            "price": 100,
+            "fee": 5,
+        },
+    ).get_json()
+    assert buy["gross_amount"] == pytest.approx(1_000)
+    assert buy["cash_flow"] == pytest.approx(-1_005)
+
+    edited = client.patch(
+        f"/api/transactions/{buy['id']}",
+        json={"quantity": 20, "price": 90, "fee": 10},
+    )
+    assert edited.status_code == 200
+    body = edited.get_json()
+    assert body["gross_amount"] == pytest.approx(1_800)
+    assert body["cash_flow"] == pytest.approx(-1_810)
+    assert body["note"] is None
+    assert body["cash_account_id"] is None
+
+    summary = client.get("/api/portfolio/summary?date=2024-12-31").get_json()
+    assert summary["cash_value"] == pytest.approx(-1_810)
+
+
+def test_api_rejects_unknown_cash_account(app):
+    client = app.test_client()
+    account = client.post("/api/accounts", json={"name": "A"}).get_json()
+    instrument = client.post(
+        "/api/instruments", json={"symbol": "X", "currency": "TWD", "market": "TW"}
+    ).get_json()
+
+    response = client.post(
+        "/api/transactions",
+        json={
+            "account_id": account["id"],
+            "cash_account_id": 9_999,
+            "instrument_id": instrument["id"],
+            "type": "buy",
+            "trade_date": "2024-01-01",
+            "quantity": 1,
+            "price": 10,
+        },
+    )
+    assert response.status_code == 404
+    assert response.get_json()["error"] == "cash_account_not_found"
+
+
+def test_api_lists_transactions_by_funding_account(app):
+    client = app.test_client()
+    broker = client.post("/api/accounts", json={"name": "Broker"}).get_json()
+    bank = client.post("/api/accounts", json={"name": "Bank"}).get_json()
+    instrument = client.post(
+        "/api/instruments", json={"symbol": "X", "currency": "TWD", "market": "TW"}
+    ).get_json()
+
+    created = client.post(
+        "/api/transactions",
+        json={
+            "account_id": broker["id"],
+            "cash_account_id": bank["id"],
+            "instrument_id": instrument["id"],
+            "type": "buy",
+            "trade_date": "2024-01-01",
+            "quantity": 1,
+            "price": 10,
+        },
+    )
+    assert created.status_code == 201
+    assert created.get_json()["cash_account_name"] == "Bank"
+    assert created.get_json()["funding_account_name"] == "Bank"
+
+    listing = client.get(f"/api/transactions?account_id={bank['id']}").get_json()
+    assert listing["total"] == 1
+    assert listing["items"][0]["account_name"] == "Broker"
+
+    broker_only = client.get(f"/api/transactions?account_id={broker['id']}").get_json()
+    assert broker_only["total"] == 1
+
+
+def test_cash_account_ignored_without_instrument(app):
+    client = app.test_client()
+    account = client.post("/api/accounts", json={"name": "A"}).get_json()
+    other = client.post("/api/accounts", json={"name": "B"}).get_json()
+
+    created = client.post(
+        "/api/transactions",
+        json={
+            "account_id": account["id"],
+            "cash_account_id": other["id"],
+            "type": "deposit",
+            "trade_date": "2024-01-01",
+            "gross_amount": 1_000,
+        },
+    ).get_json()
+    assert created["cash_account_id"] is None
+
+
+def test_api_rejects_editing_trade_to_have_no_instrument(app):
+    client = app.test_client()
+    account = client.post("/api/accounts", json={"name": "A"}).get_json()
+    instrument = client.post(
+        "/api/instruments", json={"symbol": "X", "currency": "TWD", "market": "TW"}
+    ).get_json()
+    buy = client.post(
+        "/api/transactions",
+        json={
+            "account_id": account["id"],
+            "instrument_id": instrument["id"],
+            "type": "buy",
+            "trade_date": "2024-01-01",
+            "quantity": 1,
+            "price": 10,
+        },
+    ).get_json()
+
+    response = client.patch(f"/api/transactions/{buy['id']}", json={"instrument_id": None})
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "instrument_required_for_trade"
+
+
+def test_api_blocks_delete_of_funding_account(app):
+    client = app.test_client()
+    broker = client.post("/api/accounts", json={"name": "Broker"}).get_json()
+    bank = client.post("/api/accounts", json={"name": "Bank"}).get_json()
+    instrument = client.post(
+        "/api/instruments", json={"symbol": "X", "currency": "TWD", "market": "TW"}
+    ).get_json()
+    client.post(
+        "/api/transactions",
+        json={
+            "account_id": broker["id"],
+            "cash_account_id": bank["id"],
+            "instrument_id": instrument["id"],
+            "type": "buy",
+            "trade_date": "2024-01-01",
+            "quantity": 1,
+            "price": 10,
+        },
+    )
+
+    response = client.delete(f"/api/accounts/{bank['id']}")
+    assert response.status_code == 409
+    assert response.get_json()["error"] == "account_has_transactions"

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { deleteTransaction, type Transaction } from "../lib/api";
 import { useAccounts, useInstruments, useMeta, useTransactions } from "../lib/hooks";
 import { fmtDate, fmtMoney, fmtPrice, fmtQty } from "../lib/format";
@@ -31,6 +31,7 @@ const TONE: Record<string, string> = {
 
 export default function Transactions() {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Transaction | null>(null);
   const [accountId, setAccountId] = useState("");
   const [type, setType] = useState("");
 
@@ -64,13 +65,23 @@ export default function Transactions() {
     }
   };
 
+  const openCreate = () => {
+    setEditing(null);
+    setOpen(true);
+  };
+
+  const openEdit = (txn: Transaction) => {
+    setEditing(txn);
+    setOpen(true);
+  };
+
   return (
     <div>
       <PageHeader
         title="交易紀錄"
         description="所有持倉與損益都由這裡的流水帳推算"
         action={
-          <Button onClick={() => setOpen(true)} disabled={!accounts?.length || !meta}>
+          <Button onClick={openCreate} disabled={!accounts?.length || !meta}>
             <Plus size={16} /> 新增交易
           </Button>
         }
@@ -131,7 +142,7 @@ export default function Transactions() {
               />
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[860px] text-sm">
+                <table className="w-full min-w-[1120px] text-sm">
                   <thead>
                     <tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wide text-slate-400">
                       <th className="px-5 py-2.5 font-medium">日期</th>
@@ -140,7 +151,10 @@ export default function Transactions() {
                       <th className="px-3 py-2.5 font-medium">標的</th>
                       <th className="px-3 py-2.5 text-right font-medium">數量</th>
                       <th className="px-3 py-2.5 text-right font-medium">單價</th>
-                      <th className="px-3 py-2.5 text-right font-medium">金額</th>
+                      <th className="px-3 py-2.5 text-right font-medium">成交金額</th>
+                      <th className="px-3 py-2.5 text-right font-medium">手續費</th>
+                      <th className="px-3 py-2.5 text-right font-medium">稅費</th>
+                      <th className="px-3 py-2.5 text-right font-medium">淨額</th>
                       <th className="px-3 py-2.5 font-medium">幣別</th>
                       <th className="px-5 py-2.5" />
                     </tr>
@@ -154,7 +168,14 @@ export default function Transactions() {
                             {labels.get(t.type) ?? t.type}
                           </Badge>
                         </td>
-                        <td className="px-3 py-3 text-slate-600">{t.account_name}</td>
+                        <td className="px-3 py-3 text-slate-600">
+                          <div>{t.account_name}</div>
+                          {t.cash_account_id ? (
+                            <div className="mt-0.5 text-[11px] text-amber-600">
+                              資金：{t.funding_account_name}
+                            </div>
+                          ) : null}
+                        </td>
                         <td className="px-3 py-3">
                           {t.instrument_symbol ? (
                             <>
@@ -178,17 +199,48 @@ export default function Transactions() {
                         <td className="tabular px-3 py-3 text-right font-medium text-slate-800">
                           {fmtMoney(t.gross_amount, t.currency, 2)}
                         </td>
+                        <td className="tabular px-3 py-3 text-right text-slate-600">
+                          {t.fee ? fmtMoney(t.fee, t.currency, 2) : "—"}
+                        </td>
+                        <td className="tabular px-3 py-3 text-right text-slate-600">
+                          {t.tax ? fmtMoney(t.tax, t.currency, 2) : "—"}
+                        </td>
+                        <td className="tabular px-3 py-3 text-right">
+                          {t.cash_flow === null ? (
+                            <span className="text-slate-400">—</span>
+                          ) : (
+                            <span
+                              className={
+                                t.cash_flow > 0
+                                  ? "font-medium text-emerald-600"
+                                  : "font-medium text-slate-700"
+                              }
+                            >
+                              {t.cash_flow > 0 ? "+" : ""}
+                              {fmtMoney(t.cash_flow, t.currency, 2)}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-3 text-xs text-slate-500">{t.currency}</td>
                         <td className="px-5 py-3 text-right">
-                          <button
-                            onClick={() => onDelete(t)}
-                            className={cn(
-                              "rounded-lg p-1.5 text-slate-300 transition hover:bg-rose-50 hover:text-rose-600",
-                            )}
-                            aria-label="刪除"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                          <div className="flex justify-end gap-1">
+                            <button
+                              onClick={() => openEdit(t)}
+                              className="rounded-lg p-1.5 text-slate-300 transition hover:bg-slate-100 hover:text-slate-700"
+                              aria-label="編輯"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                            <button
+                              onClick={() => onDelete(t)}
+                              className={cn(
+                                "rounded-lg p-1.5 text-slate-300 transition hover:bg-rose-50 hover:text-rose-600",
+                              )}
+                              aria-label="刪除"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -200,14 +252,30 @@ export default function Transactions() {
         </>
       )}
 
-      <Modal open={open} title="新增交易" onClose={() => setOpen(false)} width="max-w-lg">
+      <Modal
+        open={open}
+        title={editing ? `編輯交易 #${editing.id}` : "新增交易"}
+        onClose={() => {
+          setOpen(false);
+          setEditing(null);
+        }}
+        width="max-w-lg"
+      >
         {accounts && instruments && meta ? (
           <TransactionForm
+            key={editing?.id ?? "new"}
             accounts={accounts}
             instruments={instruments}
             meta={meta}
-            onDone={() => setOpen(false)}
-            onCancel={() => setOpen(false)}
+            initial={editing ?? undefined}
+            onDone={() => {
+              setOpen(false);
+              setEditing(null);
+            }}
+            onCancel={() => {
+              setOpen(false);
+              setEditing(null);
+            }}
           />
         ) : null}
       </Modal>

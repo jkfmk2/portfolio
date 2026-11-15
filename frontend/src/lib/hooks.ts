@@ -25,10 +25,10 @@ export function useTransactions(filters: TransactionFilters = {}) {
   });
 }
 
-export function useSummary(date?: string, base?: string) {
+export function useSummary(date?: string, base?: string, accountId?: number) {
   return useQuery({
-    queryKey: ["summary", date ?? "today", base ?? "default"],
-    queryFn: () => getSummary(date, base),
+    queryKey: ["summary", date ?? "today", base ?? "default", accountId ?? "all"],
+    queryFn: () => getSummary(date, base, accountId),
   });
 }
 

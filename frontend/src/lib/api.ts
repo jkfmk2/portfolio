@@ -49,8 +49,11 @@ export interface Instrument {
 export interface Transaction {
   id: number;
   account_id: number;
+  cash_account_id: number | null;
   instrument_id: number | null;
   account_name: string | null;
+  cash_account_name: string | null;
+  funding_account_name: string | null;
   instrument_symbol: string | null;
   instrument_name: string | null;
   instrument_label: string | null;
@@ -64,6 +67,7 @@ export interface Transaction {
   tax: number;
   currency: string;
   fx_rate: number;
+  cash_flow: number | null;
   note: string | null;
   external_id: string | null;
   created_at: string;
@@ -125,6 +129,7 @@ export interface AllocationSlice {
 export interface PortfolioSummary {
   as_of: string;
   base_currency: string;
+  account_id: number | null;
   total_value: number;
   securities_value: number;
   cash_value: number;
@@ -214,6 +219,7 @@ export const deleteInstrument = (id: number) =>
 /* transactions */
 export interface TransactionFilters {
   account_id?: number;
+  cash_account_id?: number;
   instrument_id?: number;
   type?: string;
   start?: string;
@@ -238,10 +244,11 @@ export const deleteTransaction = (id: number) =>
   request<void>(`/transactions/${id}`, { method: "DELETE" });
 
 /* portfolio */
-export const getSummary = (date?: string, base?: string) => {
+export const getSummary = (date?: string, base?: string, accountId?: number) => {
   const params = new URLSearchParams();
   if (date) params.set("date", date);
   if (base) params.set("base", base);
+  if (accountId) params.set("account_id", String(accountId));
   const query = params.toString();
   return request<PortfolioSummary>(`/portfolio/summary${query ? `?${query}` : ""}`);
 };

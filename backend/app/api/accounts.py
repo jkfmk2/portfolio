@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from flask import Blueprint, jsonify
+from sqlalchemy import or_
 
 from ..extensions import db
 from ..models import Account, Transaction
@@ -53,7 +54,10 @@ def delete_account(account_id: int):
     account = db.session.get(Account, account_id)
     if not account:
         return error("account_not_found", 404)
-    if Transaction.query.filter_by(account_id=account_id).count():
+    in_use = Transaction.query.filter(
+        or_(Transaction.account_id == account_id, Transaction.cash_account_id == account_id)
+    ).count()
+    if in_use:
         return error("account_has_transactions", 409)
     db.session.delete(account)
     db.session.commit()

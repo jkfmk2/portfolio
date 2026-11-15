@@ -17,6 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .extensions import db
+from .services.cashflow import net_amount
 
 ASSET_TYPES = ("stock", "etf", "bond", "cash")
 ACCOUNT_TYPES = ("broker", "bank", "cash")
@@ -91,7 +92,9 @@ class Account(SerializerMixin, db.Model):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
-    transactions: Mapped[list["Transaction"]] = relationship(back_populates="account")
+    transactions: Mapped[list["Transaction"]] = relationship(
+        back_populates="account", foreign_keys="Transaction.account_id"
+    )
 
 
 class Instrument(SerializerMixin, db.Model):
@@ -138,7 +141,10 @@ class Transaction(SerializerMixin, db.Model):
     __tablename__ = "transactions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Securities / holding account.
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"), nullable=False)
+    # Optional funding account; NULL means the cash leg uses ``account_id``.
+    cash_account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id"))
     instrument_id: Mapped[int | None] = mapped_column(ForeignKey("instruments.id"))
     type: Mapped[str] = mapped_column(String(20), nullable=False)
     trade_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -153,12 +159,22 @@ class Transaction(SerializerMixin, db.Model):
     external_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
-    account: Mapped["Account"] = relationship(back_populates="transactions")
+    account: Mapped["Account"] = relationship(
+        back_populates="transactions", foreign_keys=[account_id]
+    )
+    cash_account: Mapped["Account | None"] = relationship(foreign_keys=[cash_account_id])
     instrument: Mapped["Instrument | None"] = relationship(back_populates="transactions")
 
     def to_dict(self) -> dict:
         data = super().to_dict()
         data["account_name"] = self.account.name if self.account else None
+        data["cash_account_name"] = self.cash_account.name if self.cash_account else None
+        data["funding_account_name"] = (
+            self.cash_account.name
+            if self.cash_account
+            else (self.account.name if self.account else None)
+        )
+        data["cash_flow"] = net_amount(self)
         if self.instrument:
             data["instrument_symbol"] = self.instrument.symbol
             data["instrument_name"] = self.instrument.name

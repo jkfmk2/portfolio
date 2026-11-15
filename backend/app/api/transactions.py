@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from flask import Blueprint, jsonify, request
+from sqlalchemy import or_
 
 from ..extensions import db
 from ..models import Account, Instrument, Transaction
@@ -29,7 +30,13 @@ def list_transactions():
 
     account_id = request.args.get("account_id", type=int)
     if account_id:
-        query = query.filter(Transaction.account_id == account_id)
+        # "Involves this account": either the holding or the funding side.
+        query = query.filter(
+            or_(Transaction.account_id == account_id, Transaction.cash_account_id == account_id)
+        )
+    cash_account_id = request.args.get("cash_account_id", type=int)
+    if cash_account_id:
+        query = query.filter(Transaction.cash_account_id == cash_account_id)
     instrument_id = request.args.get("instrument_id", type=int)
     if instrument_id:
         query = query.filter(Transaction.instrument_id == instrument_id)
@@ -75,6 +82,12 @@ def create_transaction():
     if payload.type in TRADE_TYPES and instrument is None:
         return error("instrument_required_for_trade", 400)
 
+    cash_account_id = payload.cash_account_id
+    if instrument is None:
+        cash_account_id = None
+    elif cash_account_id is not None and not db.session.get(Account, cash_account_id):
+        return error("cash_account_not_found", 404)
+
     currency = payload.currency or (instrument.currency if instrument else account.currency)
     gross = payload.gross_amount
     if gross is None:
@@ -82,6 +95,7 @@ def create_transaction():
 
     txn = Transaction(
         account_id=payload.account_id,
+        cash_account_id=cash_account_id,
         instrument_id=payload.instrument_id,
         type=payload.type,
         trade_date=payload.trade_date,
@@ -124,8 +138,19 @@ def update_transaction(txn_id: int):
     if changes.get("instrument_id") is not None:
         if not db.session.get(Instrument, changes["instrument_id"]):
             return error("instrument_not_found", 404)
+    if changes.get("cash_account_id") is not None:
+        if not db.session.get(Account, changes["cash_account_id"]):
+            return error("cash_account_not_found", 404)
+
+    final_type = changes.get("type", txn.type)
+    final_instrument_id = changes.get("instrument_id", txn.instrument_id)
+    if final_type in TRADE_TYPES and final_instrument_id is None:
+        return error("instrument_required_for_trade", 400)
 
     apply_fields(txn, changes)
+    # Cash accounts only make sense for transactions that reference an instrument.
+    if txn.instrument_id is None:
+        txn.cash_account_id = None
     if "gross_amount" not in changes and txn.type in ("buy", "sell"):
         txn.gross_amount = float(txn.quantity) * float(txn.price)
     db.session.commit()

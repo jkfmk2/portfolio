@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -284,7 +285,13 @@ export default function Dashboard() {
                     <td className="px-5 py-3">
                       <p className="font-semibold text-slate-800">{h.symbol}</p>
                       <p className="mt-0.5 text-xs text-slate-400">
-                        {h.name || "—"} · {h.account_name}
+                        {h.name || "—"} ·{" "}
+                        <Link
+                          to={`/accounts/${h.account_id}`}
+                          className="hover:text-slate-700 hover:underline"
+                        >
+                          {h.account_name}
+                        </Link>
                       </p>
                     </td>
                     <td className="px-3 py-3">
@@ -346,7 +353,14 @@ export default function Dashboard() {
               <tbody className="divide-y divide-slate-50">
                 {s.cash_positions.map((p, index) => (
                   <tr key={`${p.account_id}-${p.currency}-${index}`} className="hover:bg-slate-50/60">
-                    <td className="px-5 py-3 font-medium text-slate-700">{p.account_name}</td>
+                    <td className="px-5 py-3 font-medium text-slate-700">
+                      <Link
+                        to={`/accounts/${p.account_id}`}
+                        className="hover:text-slate-900 hover:underline"
+                      >
+                        {p.account_name}
+                      </Link>
+                    </td>
                     <td className="px-3 py-3 text-slate-500">{p.currency}</td>
                     <td className="tabular px-3 py-3 text-right text-slate-700">
                       {fmtMoney(p.amount, p.currency, 2)}

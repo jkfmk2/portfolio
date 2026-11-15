@@ -76,10 +76,11 @@ def seed_demo() -> None:
     db.session.add_all(instruments.values())
     db.session.flush()
 
-    def txn(account, txn_type, trade_date, *, instrument=None, quantity=0, price=0,
-            gross=None, fee=0, tax=0, currency=None, note=None):
+    def txn(account, txn_type, trade_date, *, instrument=None, cash_account=None,
+            quantity=0, price=0, gross=None, fee=0, tax=0, currency=None, note=None):
         return Transaction(
             account_id=account.id,
+            cash_account_id=cash_account.id if cash_account else None,
             instrument_id=instrument.id if instrument else None,
             type=txn_type,
             trade_date=trade_date,
@@ -96,10 +97,14 @@ def seed_demo() -> None:
     db.session.add_all(
         [
             txn(accounts["tw_broker"], "deposit", date(2024, 1, 2), gross=1_000_000, note="初始入金"),
-            txn(accounts["tw_broker"], "buy", date(2024, 1, 15), instrument=instruments["2330"], quantity=1000, price=600, fee=100),
+            txn(
+                accounts["tw_broker"], "buy", date(2024, 1, 15),
+                instrument=instruments["2330"], cash_account=accounts["tw_cash"],
+                quantity=1000, price=600, fee=100, note="由台幣現金交割",
+            ),
             txn(accounts["tw_broker"], "buy", date(2024, 2, 1), instrument=instruments["0050"], quantity=2000, price=130, fee=100),
             txn(accounts["tw_broker"], "dividend", date(2024, 8, 1), instrument=instruments["0050"], gross=3000),
-            txn(accounts["tw_cash"], "deposit", date(2024, 1, 5), gross=200_000),
+            txn(accounts["tw_cash"], "deposit", date(2024, 1, 5), gross=1_000_000),
             txn(accounts["us_cash"], "deposit", date(2024, 1, 5), gross=20_000),
             txn(accounts["us_broker"], "deposit", date(2024, 1, 8), gross=80_000, note="電匯入金"),
             txn(accounts["us_broker"], "buy", date(2024, 3, 1), instrument=instruments["VOO"], quantity=100, price=480),

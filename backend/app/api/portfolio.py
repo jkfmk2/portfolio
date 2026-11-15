@@ -23,17 +23,20 @@ def _as_of() -> date:
 @bp.get("/summary")
 def summary():
     base = (request.args.get("base") or current_app.config["BASE_CURRENCY"]).upper()
-    return jsonify(build_portfolio(_as_of(), base))
+    account_id = request.args.get("account_id", type=int)
+    return jsonify(build_portfolio(_as_of(), base, account_id))
 
 
 @bp.get("/holdings")
 def holdings():
     base = (request.args.get("base") or current_app.config["BASE_CURRENCY"]).upper()
-    data = build_portfolio(_as_of(), base)
+    account_id = request.args.get("account_id", type=int)
+    data = build_portfolio(_as_of(), base, account_id)
     return jsonify(
         {
             "as_of": data["as_of"],
             "base_currency": data["base_currency"],
+            "account_id": data["account_id"],
             "holdings": data["holdings"],
             "cash_positions": data["cash_positions"],
             "warnings": data["warnings"],
