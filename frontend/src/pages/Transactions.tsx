@@ -156,7 +156,7 @@ export default function Transactions() {
                       <th className="px-3 py-2.5 text-right font-medium">稅費</th>
                       <th className="px-3 py-2.5 text-right font-medium">淨額</th>
                       <th className="px-3 py-2.5 font-medium">幣別</th>
-                      <th className="px-5 py-2.5" />
+                      <th className="sticky right-0 border-l border-slate-100 bg-white px-5 py-2.5" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -222,7 +222,7 @@ export default function Transactions() {
                           )}
                         </td>
                         <td className="px-3 py-3 text-xs text-slate-500">{t.currency}</td>
-                        <td className="px-5 py-3 text-right">
+                        <td className="sticky right-0 border-l border-slate-100 bg-white px-5 py-3 text-right group-hover:bg-slate-50">
                           <div className="flex justify-end gap-1">
                             <button
                               onClick={() => openEdit(t)}
